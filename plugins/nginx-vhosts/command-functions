@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/property-functions"
+source "$PLUGIN_AVAILABLE_PATH/nginx-vhosts/functions"
+source "$PLUGIN_AVAILABLE_PATH/nginx-vhosts/internal-functions"
+
+cmd-nginx-show-config() {
+  declare desc="display app nginx config"
+  declare cmd="nginx:show-config"
+  [[ "$1" == "$cmd" ]] && shift 1
+  declare APP="$1"
+  local proxy_type
+
+  verify_app_name "$APP"
+  proxy_type="$(plugn trigger proxy-type "$APP")"
+
+  local DOKKU_SCHEDULER=$(get_app_scheduler "$APP")
+  if [[ "$DOKKU_SCHEDULER" != "docker-local" ]] && [[ "$DOKKU_SCHEDULER" != "null" ]]; then
+    plugn trigger scheduler-proxy-config "$DOKKU_SCHEDULER" "$APP" "$proxy_type"
+    return $?
+  fi
+
+  if [[ "$proxy_type" != "nginx" ]]; then
+    dokku_log_fail "This command is only available for apps with the nginx proxy type"
+  fi
+
+  if [[ ! -f "$DOKKU_ROOT/$APP/nginx.conf" ]]; then
+    dokku_log_fail "No nginx.conf exists for $APP"
+  fi
+
+  cat "$DOKKU_ROOT/$APP/nginx.conf"
+}
+
+cmd-nginx-start() {
+  declare desc="starts the nginx server"
+  declare cmd="nginx:start"
+  [[ "$1" == "$cmd" ]] && shift 1
+
+  fn-plugin-property-write "nginx" "--global" "proxy-status" "started"
+  fn-nginx-vhosts-nginx-init-cmd "enable"
+  fn-nginx-vhosts-nginx-init-cmd "start"
+}
+
+cmd-nginx-stop() {
+  declare desc="stops the nginx server"
+  declare cmd="nginx:stop"
+  [[ "$1" == "$cmd" ]] && shift 1
+
+  fn-plugin-property-write "nginx" "--global" "proxy-status" "stopped"
+  fn-nginx-vhosts-nginx-init-cmd "stop"
+  fn-nginx-vhosts-nginx-init-cmd "disable"
+}
+
+cmd-nginx-reload() {
+  declare desc="reloads the nginx server config"
+  declare cmd="nginx:reload"
+  [[ "$1" == "$cmd" ]] && shift 1
+
+  local NGINX_LOCATION EXIT_CODE
+  NGINX_LOCATION=$(get_nginx_location)
+  if [[ -z "$NGINX_LOCATION" ]]; then
+    exit 1
+  fi
+
+  set +e
+  sudo "$NGINX_LOCATION" -t &>/dev/null
+  EXIT_CODE=$?
+  set -e
+  if [[ "$EXIT_CODE" -ne "0" ]]; then
+    sudo "$NGINX_LOCATION" -t
+    exit "$EXIT_CODE"
+  fi
+
+  fn-nginx-vhosts-nginx-init-cmd "reload"
+}
+
+cmd-nginx-validate-config() {
+  declare desc="validates and optionally cleans up invalid nginx configurations"
+  declare cmd="nginx:validate-config"
+  [[ "$1" == "$cmd" ]] && shift 1
+  declare APP="$1" FLAG="$2"
+
+  validate_nginx "$APP" "$FLAG"
+}

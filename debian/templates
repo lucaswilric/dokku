@@ -1,0 +1,29 @@
+Template: dokku/vhost_enable
+Description: Enable vhost-based deployments?
+Type: boolean
+Default: false
+
+Template: dokku/hostname
+Description: Hostname or IP for server:
+Type: string
+Default: dokku.me
+
+Template: dokku/skip_key_file
+Description: Skip key file requirement?
+Type: boolean
+Default: false
+
+Template: dokku/key_file
+Description: Keyfile for initial user:
+Type: string
+Default: /root/.ssh/id_rsa.pub
+
+Template: dokku/nginx_enable
+Description: Enable nginx-vhosts plugin?
+Type: boolean
+Default: true
+
+Template: dokku/install_default_site
+Description: Install a catch-all nginx default site on fresh install?
+Type: boolean
+Default: true

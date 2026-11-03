@@ -1,0 +1,280 @@
+package apps
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+
+	"github.com/dokku/dokku/plugins/common"
+)
+
+// CommandClone clones an app
+func CommandClone(oldAppName string, newAppName string, skipDeploy bool, ignoreExisting bool) error {
+	if oldAppName == "" {
+		return errors.New("Please specify an app to run the command on")
+	}
+
+	if newAppName == "" {
+		return errors.New("Please specify an new app name")
+	}
+
+	if err := common.VerifyAppName(oldAppName); err != nil {
+		return err
+	}
+
+	if err := common.IsValidAppName(newAppName); err != nil {
+		return err
+	}
+
+	if appNameTaken(newAppName) {
+		if ignoreExisting {
+			common.LogWarn("Name is already taken")
+			return nil
+		}
+
+		return errors.New("Name is already taken")
+	}
+
+	common.LogInfo1Quiet(fmt.Sprintf("Cloning %s to %s", oldAppName, newAppName))
+	if err := createApp(newAppName); err != nil {
+		return err
+	}
+
+	_, err := common.CallPlugnTrigger(common.PlugnTriggerInput{
+		Trigger:     "post-app-clone-setup",
+		Args:        []string{oldAppName, newAppName},
+		StreamStdio: true,
+	})
+	if err != nil {
+		return err
+	}
+
+	if skipDeploy {
+		os.Setenv("SKIP_REBUILD", "true")
+	}
+
+	_, err = common.CallPlugnTrigger(common.PlugnTriggerInput{
+		Trigger:     "git-has-code",
+		Args:        []string{newAppName},
+		StreamStdio: true,
+	})
+	if err != nil {
+		os.Setenv("SKIP_REBUILD", "true")
+	}
+
+	_, err = common.CallPlugnTrigger(common.PlugnTriggerInput{
+		Trigger:     "post-app-clone",
+		Args:        []string{oldAppName, newAppName},
+		StreamStdio: true,
+	})
+	return err
+}
+
+// CommandCreate creates app via command line
+func CommandCreate(appName string) error {
+	if err := common.IsValidAppName(appName); err != nil {
+		return err
+	}
+
+	return createApp(appName)
+}
+
+// CommandDestroy destroys an app
+func CommandDestroy(appName string, force bool) error {
+	if err := common.VerifyAppName(appName); err != nil {
+		return err
+	}
+
+	if force {
+		os.Setenv("DOKKU_APPS_FORCE_DELETE", "1")
+	}
+
+	return destroyApp(appName)
+}
+
+// CommandExists checks if an app exists
+func CommandExists(appName string) error {
+	return appExists(appName)
+}
+
+// CommandList lists all apps
+func CommandList(format string) error {
+	apps, err := common.DokkuApps()
+
+	if format == "json" {
+		if err != nil && !errors.Is(err, common.NoAppsExist) {
+			return err
+		}
+
+		appList := []string{}
+		appList = append(appList, apps...)
+		out, err := json.Marshal(appList)
+		if err != nil {
+			return err
+		}
+
+		common.Log(string(out))
+		return nil
+	}
+
+	common.LogInfo2Quiet("My Apps")
+	if err != nil {
+		common.LogWarn(err.Error())
+		return nil
+	}
+
+	for _, appName := range apps {
+		common.Log(appName)
+	}
+
+	return nil
+}
+
+// CommandLock locks an app for deployment
+func CommandLock(appName string) error {
+	if err := common.VerifyAppName(appName); err != nil {
+		return err
+	}
+
+	lockFile, err := os.OpenFile(getManualLockPath(appName), os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return errors.New("Unable to create deploy lock")
+	}
+	if err := lockFile.Close(); err != nil {
+		return errors.New("Unable to create deploy lock")
+	}
+
+	common.LogInfo1("Deploy lock created")
+	return nil
+}
+
+// CommandLocked checks if an app is locked for deployment
+func CommandLocked(appName string) error {
+	if err := common.VerifyAppName(appName); err != nil {
+		return err
+	}
+
+	if appIsLocked(appName) {
+		common.LogQuiet("Deploy lock exists")
+		return nil
+
+	}
+	return errors.New("Deploy lock does not exist")
+}
+
+// CommandRename renames an app
+func CommandRename(oldAppName string, newAppName string, skipDeploy bool) error {
+	if oldAppName == "" {
+		return errors.New("Please specify an app to run the command on")
+	}
+
+	if newAppName == "" {
+		return errors.New("Please specify an new app name")
+	}
+
+	if err := common.VerifyAppName(oldAppName); err != nil {
+		return err
+	}
+
+	if err := common.IsValidAppName(newAppName); err != nil {
+		return err
+	}
+
+	if appNameTaken(newAppName) {
+		return errors.New("Name is already taken")
+	}
+
+	if appIsManuallyLocked(oldAppName) {
+		return errors.New("Unable to rename a locked app, run apps:unlock first")
+	}
+
+	common.LogInfo1Quiet(fmt.Sprintf("Renaming %s to %s", oldAppName, newAppName))
+	if err := createApp(newAppName); err != nil {
+		return err
+	}
+
+	_, err := common.CallPlugnTrigger(common.PlugnTriggerInput{
+		Trigger:     "post-app-rename-setup",
+		Args:        []string{oldAppName, newAppName},
+		StreamStdio: true,
+	})
+	if err != nil {
+		return err
+	}
+
+	os.Setenv("DOKKU_APPS_FORCE_DELETE", "1")
+	if err := destroyApp(oldAppName); err != nil {
+		return err
+	}
+
+	if skipDeploy {
+		os.Setenv("SKIP_REBUILD", "true")
+	}
+
+	_, err = common.CallPlugnTrigger(common.PlugnTriggerInput{
+		Trigger:     "git-has-code",
+		Args:        []string{newAppName},
+		StreamStdio: true,
+	})
+	if err != nil {
+		os.Setenv("SKIP_REBUILD", "true")
+	}
+
+	_, err = common.CallPlugnTrigger(common.PlugnTriggerInput{
+		Trigger:     "post-app-rename",
+		Args:        []string{oldAppName, newAppName},
+		StreamStdio: true,
+	})
+	return err
+}
+
+// CommandReport displays an app report for one or more apps
+func CommandReport(appName string, format string, infoFlag string) error {
+	if len(appName) == 0 {
+		apps, err := common.DokkuApps()
+		if err != nil {
+			if errors.Is(err, common.NoAppsExist) {
+				common.LogWarn(err.Error())
+				return nil
+			}
+			return err
+		}
+		for _, appName := range apps {
+			if err := ReportSingleApp(appName, format, infoFlag); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	return ReportSingleApp(appName, format, infoFlag)
+}
+
+// CommandSet set or clear an apps property for an app
+func CommandSet(appName string, property string, value string) error {
+	if appName != "--global" && property == "disable-autocreation" {
+		common.LogFail("Property can only be specified globally")
+	}
+	common.CommandPropertySet("apps", appName, property, value, DefaultProperties, GlobalProperties)
+	return nil
+}
+
+// CommandUnlock unlocks an app for deployment
+func CommandUnlock(appName string) error {
+	if err := common.VerifyAppName(appName); err != nil {
+		return err
+	}
+
+	if deployLockHeld(appName) {
+		common.LogWarn("A deploy may be in progress.")
+		common.LogWarn("Removing the app lock will not stop in progress deploys.")
+	}
+
+	if err := removeLockFiles(getManualLockPath(appName), getLockPath(appName)); err != nil {
+		return errors.New("Unable to remove deploy lock")
+	}
+
+	common.LogInfo1("Deploy lock removed")
+	return nil
+}

@@ -1,0 +1,378 @@
+# Resource Management
+
+> [!IMPORTANT]
+> New as of 0.15.0
+
+```
+resource:limit [--process-type <process-type>] [RESOURCE_OPTS...] <app>    # Limit resources for a given app/process-type combination
+resource:limit-clear [--process-type <process-type>] <app>                 # Clear resource limits for a given app/process-type combination
+resource:report [<app>] [<flag>]                                           # Displays a resource report for one or more apps
+resource:reserve [--process-type <process-type>] [RESOURCE_OPTS...] <app>  # Reserve resources for a given app/process-type combination
+resource:reserve-clear [--process-type <process-type>] <app>               # Clear resource reservations for a given app/process-type combination
+```
+
+The resource plugin is meant to allow users to limit or reserve resources for a given app/process-type combination.
+
+## Usage
+
+By default, Dokku allows unlimited resource access to apps deployed on a server. In some cases, it may be desirable to limit this on a per-app or per-process-type basis. The `resource` plugin allows management of both resource "limits" and resource "reservations", where each resource request type has specific meaning to the scheduler in use for a given app.
+
+> [!WARNING]
+> The meaning of a values and it's units are specific to the scheduler in use for a given app. If a value is incorrect for a scheduler, this may result in containers failing to start correctly. If a scheduler does not support a given resource type combination, it will be ignored. All resource commands require an app rebuild or deploy in order to take effect.
+
+Valid resource options include:
+
+- `--cpu`
+- `--memory`
+- `--memory-swap`
+- `--network`
+- `--network-ingress`
+- `--network-egress`
+- `--nvidia-gpu`
+
+Values for `--memory` and `--memory-swap` are validated when set, and invalid values are rejected.
+
+See the [Supported Resource Management Properties](/docs/deployment/schedulers/docker-local.md#supported-resource-management-properties) section of the docker local scheduler documentation for more information on how each resource limit maps to Docker.
+
+Resource reservations are applied only during the `run` and `deploy` phases of an application. Resource limits also apply during the `build` phase when explicitly configured against the `build` process type - see [Build-time Resource Limits](#build-time-resource-limits) below.
+
+### Resource Limits
+
+When specified and supported, a resource limit will ensure that your app does not go _over_ the specified value. If this occurs, the underlying scheduler may either cap resource utilization, or it may decide to terminate and reschedule your process.
+
+Resource limits may be set via the `resource:limit` command:
+
+```shell
+dokku resource:limit --memory 100 node-js-app
+```
+
+```
+=====> Setting resource limits for node-js-app
+       memory: 100
+```
+
+Multiple resources can be limited in a single call:
+
+```shell
+dokku resource:limit --cpu 100 --memory 100 node-js-app
+```
+
+```
+=====> Setting resource limits for node-js-app
+       cpu: 100
+       memory: 100
+```
+
+Resources can also be limited on a per-process type basis. If specified, this will override any generic limits set for the app.
+
+```shell
+dokku resource:limit --cpu 100 --memory 100 --process-type worker node-js-app
+```
+
+```
+=====> Setting resource limits for node-js-app (worker)
+       cpu: 100
+       memory: 100
+```
+
+A resource value can be individually cleared by setting the value to the special value `clear`.
+
+```shell
+dokku resource:limit --cpu clear node-js-app
+```
+
+```
+=====> Setting resource limits for node-js-app
+       cpu: cleared
+```
+
+#### Displaying Resource Limits
+
+Running the `resource:limit` command without any flags will display the currently configured default app limits.
+
+```shell
+dokku resource:limit node-js-app
+```
+
+```
+=====> resource limits node-js-app information [defaults]
+       cpu:
+       memory:
+       memory-swap: 100
+       network: 100
+       network-ingress:
+       network-egress:
+       nvidia-gpu:
+```
+
+This may also be combined with the `--process-type` flag to see app limits on a process-type level. Note that the displayed values are not merged with the defaults.
+
+```shell
+dokku resource:limit --process-type web node-js-app
+```
+
+```
+=====> resource limits node-js-app information (web)
+       cpu: 100
+       memory: 100
+       memory-swap:
+       network:
+       network-ingress:
+       network-egress:
+       nvidia-gpu:
+```
+
+#### Build-time Resource Limits
+
+> [!IMPORTANT]
+> New as of 0.38.0
+
+Resource limits may be applied to the build container by using the special `build` process type. This allows constraining memory and CPU usage during the `build` phase, which is otherwise unconstrained.
+
+```shell
+dokku resource:limit --memory 4g --process-type build node-js-app
+```
+
+```
+=====> Setting resource limits for node-js-app (build)
+       memory: 4g
+```
+
+Build-time limits are applied via the `docker-args-process-build` plugin trigger. They do not inherit from default (`_default_`) limits - only limits explicitly set against the `build` process type are applied at build time. This is intentional: build phases often require more memory than the runtime process, and silently inheriting a small runtime limit would cause confusing OOM failures.
+
+> [!WARNING]
+> Do not use `build` as a runtime process type in your `Procfile`. The `build` name is reserved by the resource plugin to scope limits to the build container, and using it as a Procfile entry will cause those limits to be applied to that runtime container as well.
+
+Supported limits per builder:
+
+| Builder    | `--cpu` | `--memory` | `--memory-swap` | `--nvidia-gpu` |
+|------------|---------|------------|-----------------|----------------|
+| herokuish  | yes     | yes        | yes             | yes            |
+| dockerfile | no      | yes        | yes             | no             |
+| pack       | no      | no         | no              | no             |
+| nixpacks   | no      | no         | no              | no             |
+| railpack   | no      | no         | no              | no             |
+| lambda     | no      | no         | no              | no             |
+
+Resource keys outside the supported set for a builder are silently ignored. Reservations (`resource:reserve`) are never applied at build time - only limits.
+
+#### Clearing Resource Limits
+
+In cases where the values are incorrect - or there is no desire to limit resources - resource limits may be cleared using the `resource:limit-clear` command. When no process type is specified, resource limits are cleared for all process types. Resource reservations are left untouched.
+
+```shell
+dokku resource:limit-clear node-js-app
+```
+
+```
+=====> clearing node-js-app limits
+```
+
+Resource limits for a single process type can be cleared by specifying the `--process-type` flag.
+
+```shell
+dokku resource:limit-clear --process-type worker node-js-app
+```
+
+```
+=====> clearing node-js-app limits (worker)
+```
+
+### Resource Reservations
+
+When specified and supported, a resource reservation will ensure that your server has _at least_ the specified resources before placing a given app's process. If there a resource exhaustion, future rebuilds and deploys may fail.
+
+Resource reservations may be set via the `resource:reserve` command:
+
+```shell
+dokku resource:reserve --memory 100 node-js-app
+```
+
+```
+=====> Setting resource reservation for node-js-app
+       memory: 100
+```
+
+Multiple resources can be limited in a single call:
+
+```shell
+dokku resource:reserve --cpu 100 --memory 100 node-js-app
+```
+
+```
+=====> Setting resource reservation for node-js-app
+       cpu: 100
+       memory: 100
+```
+
+Resources can also be limited on a per-process type basis. If specified, this will override any generic limits set for the app.
+
+```shell
+dokku resource:reserve --cpu 100 --memory 100 --process-type worker node-js-app
+```
+
+```
+=====> Setting resource reservation for node-js-app (worker)
+       cpu: 100
+       memory: 100
+```
+
+A resource value can be individually cleared by setting the value to the special value `clear`.
+
+```shell
+dokku resource:reserve --cpu clear node-js-app
+```
+
+```
+=====> Setting resource reservation for node-js-app
+       cpu: cleared
+```
+
+#### Displaying Resource Reservations
+
+Running the `resource:reserve` command without any flags will display the currently configured default app reservations.
+
+```shell
+dokku resource:reserve node-js-app
+```
+
+```
+=====> resource reservation node-js-app information [defaults]
+       cpu: 100
+       memory: 100
+       memory-swap:
+       network:
+       network-ingress:
+       network-egress:
+       nvidia-gpu:
+```
+
+This may also be combined with the `--process-type` flag to see app reservations on a process-type level. Note that the displayed values are not merged with the defaults.
+
+```shell
+dokku resource:reserve --process-type web node-js-app
+```
+
+```
+=====> resource reservation node-js-app information (web)
+       cpu: 100
+       memory: 100
+       memory-swap:
+       network:
+       network-ingress:
+       network-egress:
+       nvidia-gpu:
+```
+
+#### Clearing Resource Reservations
+
+In cases where the values are incorrect - or there is no desire to reserve resources - resource reservations may be cleared using the `resource:reserve-clear` command. When no process type is specified, resource reservations are cleared for all process types. Resource limits are left untouched.
+
+```shell
+dokku resource:reserve-clear node-js-app
+```
+
+```
+=====> clearing node-js-app reservation
+```
+
+Resource reservations for a single process type can be cleared by specifying the `--process-type` flag.
+
+```shell
+dokku resource:reserve-clear --process-type worker node-js-app
+```
+
+```
+=====> clearing node-js-app reservation (worker)
+```
+
+### Displaying resource reports for an app
+
+You can get a report about the app's resource status using the `resource:report` command:
+
+```shell
+dokku resource:report
+```
+
+```
+=====> node-js-app resource information
+       web limit cpu:
+       web limit memory: 1024
+       web limit memory swap: 0
+       web limit network: 10
+       web limit network ingress:
+       web limit network egress:
+       web limit nvidia gpu:
+       web reservation cpu:
+       web reservation memory: 512
+       web reservation memory swap:
+       web reservation network: 8
+       web reservation network ingress:
+       web reservation network egress:
+       web reservation nvidia gpu:
+=====> python-sample resource information
+       web limit cpu:
+       web limit memory:
+       web limit memory swap:
+       web limit network:
+       web limit network ingress:
+       web limit network egress:
+       web limit nvidia gpu:
+       web reservation cpu:
+       web reservation memory:
+       web reservation memory swap:
+       web reservation network:
+       web reservation network ingress:
+       web reservation network egress:
+       web reservation nvidia gpu:
+=====> ruby-sample resource information
+       web limit cpu:
+       web limit memory:
+       web limit memory swap:
+       web limit network:
+       web limit network ingress:
+       web limit network egress:
+       web limit nvidia gpu:
+       web reservation cpu:
+       web reservation memory:
+       web reservation memory swap:
+       web reservation network:
+       web reservation network ingress:
+       web reservation network egress:
+       web reservation nvidia gpu:
+```
+
+You can run the command for a specific app also.
+
+```shell
+dokku resource:report node-js-app
+```
+
+```
+=====> node-js-app resource information
+       web limit cpu:
+       web limit memory: 1024
+       web limit memory swap: 0
+       web limit network: 10
+       web limit network ingress:
+       web limit network egress:
+       web limit nvidia gpu:
+       web reservation cpu:
+       web reservation memory: 512
+       web reservation memory swap:
+       web reservation network: 8
+       web reservation network ingress:
+       web reservation network egress:
+       web reservation nvidia gpu:
+```
+
+You can pass flags which will output only the value of the specific information you want. For example:
+
+```shell
+# Note the periods in the flag name
+dokku resource:report node-js-app --resource-web.limit.memory
+```
+
+```
+1024
+```

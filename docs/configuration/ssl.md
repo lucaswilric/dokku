@@ -1,0 +1,177 @@
+# SSL Configuration
+
+> [!IMPORTANT]
+> New as of 0.4.0
+
+Dokku supports SSL/TLS certificate inspection and CSR/Self-signed certificate generation via the `certs` plugin. Note that whenever SSL/TLS support is enabled SPDY is also enabled.
+
+```
+certs:add <app> CRT KEY                  # Add an ssl endpoint to an app. Can also import from a tarball on stdin.
+certs:generate <app> DOMAIN              # Generate a key and certificate signing request (and self-signed certificate)
+certs:remove <app>                       # Remove an SSL Endpoint from an app.
+certs:report [<app>] [<flag>]            # Displays an ssl report for one or more apps
+certs:show <app> <crt|key>               # Show the server.crt or server.key on stdout
+certs:update <app> CRT KEY               # Update an SSL Endpoint on an app. Can also import from a tarball on stdin
+```
+
+```shell
+# for 0.3.x
+dokku nginx:import-ssl <app> < certs.tar
+```
+
+> Adding an ssl certificate before deploying an application will result in port mappings being updated. This may cause issues for applications that use non-standard ports, as those may not be automatically detected. Please refer to the [proxy documentation](/docs/networking/proxy-management.md) for information as to how to reconfigure the mappings.
+
+## Per-application certificate management
+
+Dokku provides built-in support for managing SSL certificates on a per-application basis. SSL is managed via nginx outside of application containers, and as such can be updated on-the-fly without rebuilding containers. At this time, applications only support a single SSL certificate at a time. To support multiple domains for a single application, wildcard certificate usage is encouraged.
+
+### Certificate setting
+
+The `certs:add` command can be used to push a `tar` containing a certificate `.crt` and `.key` file to a single application. The command should correctly handle cases where the `.crt` and `.key` are not named properly or are nested in a subdirectory of said `tar` file. You can import it as follows:
+
+```shell
+tar cvf cert-key.tar server.crt server.key
+dokku certs:add node-js-app < cert-key.tar
+```
+
+> [!NOTE]
+> If your `.crt` file came alongside a `.ca-bundle`, you'll want to concatenate those into a single `.crt` file before adding it to the `.tar`.
+
+```shell
+cat yourdomain_com.crt yourdomain_com.ca-bundle > server.crt
+```
+
+> [!NOTE]
+> Archives passed to `certs:add` are validated before extraction to prevent path traversal and symlink escape attacks. Archives containing absolute paths, parent directory traversal entries, or symlinks pointing outside the extraction directory will be rejected.
+
+#### SSL and Multiple Domains
+
+When an SSL certificate is associated to an application, the certificate will be associated with _all_ domains currently associated with said application. Your certificate _should_ be associated with all of those domains, otherwise accessing the application will result in SSL errors. If you wish to remove one of the domains from the application, refer to the [domain configuration documentation](/docs/configuration/domains.md).
+
+Note that with the default nginx template, requests will be redirected to the `https` version of the domain. If this is not the desired state of request resolution, you may customize the nginx template in use. For more details, see the [nginx documentation](/docs/networking/proxies/nginx.md).
+
+### Certificate generation
+
+> [!NOTE]
+> Using this method will create a self-signed certificate, which is only recommended for development or staging use, not production environments.
+
+The `certs:generate` command will walk you through the correct `openssl` commands to create a key, csr and a self-signed cert for a given app/domain. We automatically put the self-signed cert in place as well as add the specified domain to the application configuration.
+
+If you decide to obtain a CA signed certificate, you can import that certificate using the aforementioned `dokku certs:add` command.
+
+### Certificate removal
+
+The `certs:remove` command only works on app-specific certificates. It will `rm` the app-specific tls directory, rebuild the nginx configuration, and reload nginx.
+
+### Showing the certificate
+
+The `certs:show` command can be used to show your configured certs for an app. The show command can be used for example to export Let's Encrypt certificates
+after they've been generated. You can export it as follows:
+
+```shell
+dokku certs:show node-js-app crt > server.crt
+dokku certs:show node-js-app key > server.key
+```
+
+### Displaying certificate reports for an app
+
+> [!IMPORTANT]
+> New as of 0.8.1
+
+You can get a report about the apps ssl status using the `certs:report` command:
+
+```shell
+dokku certs:report
+```
+
+```
+=====> node-js-app ssl information
+       Ssl dir:                       /home/dokku/node-js-app/tls
+       Ssl enabled:                   true
+       Ssl expires at:                Oct  5 23:59:59 2019 GMT
+       Ssl fingerprint:               9E:2F:0B:74:C3:5A:81:D6:4F:AA:12:38:E7:6B:90:5C:D1:47:2E:8A:B3:65:F9:0D:28:C4:71:AE:53:80:6F:12
+       Ssl hostnames:                 *.node-js-app.org node-js-app.org
+       Ssl issuer:                    C=GB, ST=Greater Manchester, L=Salford, O=COMODO CA Limited, CN=COMODO RSA Domain Validation Secure Server CA
+       Ssl serial:                    2F4B8C1D6E9A0357B8C2D4E6F8091A2B
+       Ssl starts at:                 Oct  5 00:00:00 2016 GMT
+       Ssl subject:                   OU=Domain Control Validated; OU=PositiveSSL Wildcard; CN=*.node-js-app.org
+       Ssl verified:                  self signed
+=====> python-app ssl information
+       Ssl dir:                       /home/dokku/python-app/tls
+       Ssl enabled:                   false
+       Ssl expires at:
+       Ssl fingerprint:
+       Ssl hostnames:
+       Ssl issuer:
+       Ssl serial:
+       Ssl starts at:
+       Ssl subject:
+       Ssl verified:
+```
+
+You can run the command for a specific app also.
+
+```shell
+dokku certs:report node-js-app
+```
+
+```
+=====> node-js-app ssl information
+       Ssl dir:                       /home/dokku/node-js-app/tls
+       Ssl enabled:                   true
+       Ssl expires at:                Oct  5 23:59:59 2019 GMT
+       Ssl fingerprint:               9E:2F:0B:74:C3:5A:81:D6:4F:AA:12:38:E7:6B:90:5C:D1:47:2E:8A:B3:65:F9:0D:28:C4:71:AE:53:80:6F:12
+       Ssl hostnames:                 *.dokku.org dokku.org
+       Ssl issuer:                    C=GB, ST=Greater Manchester, L=Salford, O=COMODO CA Limited, CN=COMODO RSA Domain Validation Secure Server CA
+       Ssl serial:                    2F4B8C1D6E9A0357B8C2D4E6F8091A2B
+       Ssl starts at:                 Oct  5 00:00:00 2016 GMT
+       Ssl subject:                   OU=Domain Control Validated; OU=PositiveSSL Wildcard; CN=*.dokku.org
+       Ssl verified:                  self signed
+```
+
+You can pass flags which will output only the value of the specific information you want. For example:
+
+```shell
+dokku certs:report node-js-app --ssl-enabled
+```
+
+## HSTS Header
+
+The [HSTS header](https://en.wikipedia.org/wiki/HTTP_Strict_Transport_Security) is an HTTP header that can inform browsers that all requests to a given site should be made via HTTPS. Dokku enables this header by default for HTTPS requests.
+
+See the [NGINX HSTS documentation](/docs/networking/proxies/nginx.md#hsts-header) for more information on how the HSTS configuration can be managed for your application.
+
+## HTTP/2 support
+
+Certain versions of nginx have bugs that prevent [HTTP/2](https://nginx.org/en/docs/http/ngx_http_v2_module.html) from properly responding to all clients, thus causing applications to be unavailable. For HTTP/2 to be enabled in your applications' nginx configs, you need to have installed nginx 1.11.5 or higher. See [issue 2435](https://github.com/dokku/dokku/issues/2435) for more details.
+
+### SSL Port Exposure
+
+When your app is served from port `80` then the `/home/dokku/APP/nginx.conf` file will automatically be updated to instruct nginx to respond to ssl on port 443 as a new cert is added. If your app uses a non-standard port (perhaps you have a dockerfile deploy exposing port `99999`) you may need to manually expose an ssl port via `dokku ports:add <APP> https:443:99999`.
+
+If an `https:443:*` port mapping already exists when a certificate is installed or renewed, Dokku will preserve it rather than rewriting it from the `http:80:*` mappings. This allows apps that terminate TLS inside the container (for example, with a configuration like `http:80:80 https:443:443`) to keep their explicit mapping across `dokku certs:add` and unattended renewals.
+
+## Other
+
+### Running behind a proxy (`X-Forwarded-Ssl`, etc.)
+
+See the [running behind another proxy documentation](/docs/networking/proxies/nginx.md#running-behind-another-proxy-configuring-x-forwarded-headers) for more information on how to configure your Nginx config when your server is running behind a proxy (e.g. load balancer, etc.).
+
+## Properties
+
+### Read-only flags
+
+The following flags surface in `certs:report` but are not managed by `certs:set` - they are derived from the on-disk certificate:
+
+| Flag | Description |
+| --- | --- |
+| `--ssl-enabled` | `true` when an SSL certificate is installed for the app |
+| `--ssl-dir` | Absolute path to the per-app certificate directory |
+| `--ssl-hostnames` | Hostnames the certificate covers (CN plus Subject Alternative Names) |
+| `--ssl-issuer` | Certificate issuer DN |
+| `--ssl-subject` | Certificate subject DN |
+| `--ssl-fingerprint` | SHA-256 digest of the leaf certificate's DER encoding, the value `openssl x509 -noout -fingerprint -sha256` prints |
+| `--ssl-serial` | Serial number of the leaf certificate |
+| `--ssl-verified` | `verified by a certificate authority` when the certificate chain verifies against the system CA bundle, `self signed` otherwise |
+| `--ssl-expires-at` | Certificate `notAfter` timestamp |
+| `--ssl-starts-at` | Certificate `notBefore` timestamp |

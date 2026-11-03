@@ -1,0 +1,1065 @@
+#!/usr/bin/env bats
+
+load test_helper
+
+SMOKE_TEST_APP_1_0_0_SHA=9cf71bba639c4f1671dfd42685338b762d3354f2
+SMOKE_TEST_APP_2_0_0_SHA=5c8a5e42bbd7fae98bd657fb17f41c6019b303f9
+SMOKE_TEST_APP_ANOTHER_BRANCH_SHA=5c8a5e42bbd7fae98bd657fb17f41c6019b303f9
+SMOKE_TEST_APP_MASTER_SHA=96f6ba2db912c93707080a358016d1febb7c560a
+SMOKE_TEST_APP_COMMIT_SHA=5c8a5e42bbd7fae98bd657fb17f41c6019b303f9
+
+setup() {
+  global_setup
+  create_app
+  [[ -f "$DOKKU_ROOT/.netrc" ]] && cp -fp "$DOKKU_ROOT/.netrc" "$DOKKU_ROOT/.netrc.bak"
+  touch /home/dokku/.netrc
+  chown dokku:dokku /home/dokku/.netrc
+  touch /home/dokku/.ssh/known_hosts
+  chown dokku:dokku /home/dokku/.ssh/known_hosts
+}
+
+teardown() {
+  rm -f /home/dokku/.ssh/id_rsa.pub || true
+  [[ -f "$DOKKU_ROOT/.netrc.bak" ]] && mv "$DOKKU_ROOT/.netrc.bak" "$DOKKU_ROOT/.netrc" && chown dokku:dokku "$DOKKU_ROOT/.netrc"
+  destroy_app
+  global_teardown
+}
+
+@test "(git) git:allow-host" {
+  run /bin/bash -c "dokku git:allow-host"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+
+  run /bin/bash -c "cat /home/dokku/.ssh/known_hosts | wc -l"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  start_lines=$output
+
+  run /bin/bash -c "dokku git:allow-host github.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/.ssh/known_hosts | wc -l"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "test -f /home/dokku/.ssh/known_hosts"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/.ssh/known_hosts | wc -l"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_equal "$output" "$((start_lines + 1))"
+
+  run /bin/bash -c "dokku git:allow-host github.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/.ssh/known_hosts | wc -l"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_equal "$output" "$((start_lines + 2))"
+}
+
+@test "(git) git:auth" {
+  run /bin/bash -c "dokku git:auth"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+
+  run /bin/bash -c "dokku git:auth github.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Removing netrc auth entry for host github.com"
+
+  run /bin/bash -c "dokku git:auth github.com username"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+  assert_output_contains "Missing password for netrc auth entry"
+
+  run /bin/bash -c "dokku git:auth github.com username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Setting netrc auth entry for host github.com"
+
+  run /bin/bash -c "printf 'piped-password' | dokku git:auth github.com piped-username"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Setting netrc auth entry for host github.com"
+
+  run /bin/bash -c "netrc get --netrc-file ${DOKKU_ROOT}/.netrc github.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "piped-username:piped-password"
+
+  run /bin/bash -c "stat -c '%a' ${DOKKU_ROOT}/.netrc"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "600"
+
+  run /bin/bash -c "stat -c '%U:%G' ${DOKKU_ROOT}/.netrc"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "dokku:dokku"
+}
+
+@test "(git) git:auth repairs world-readable .netrc" {
+  run /bin/bash -c "chmod 644 ${DOKKU_ROOT}/.netrc"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "stat -c '%a' ${DOKKU_ROOT}/.netrc"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "644"
+
+  run /bin/bash -c "dokku git:auth github.com username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Setting netrc auth entry for host github.com"
+
+  run /bin/bash -c "stat -c '%a' ${DOKKU_ROOT}/.netrc"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "600"
+
+  run /bin/bash -c "stat -c '%U:%G' ${DOKKU_ROOT}/.netrc"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "dokku:dokku"
+}
+
+@test "(git) git:auth unset preserves 0600 on remaining .netrc" {
+  run /bin/bash -c "dokku git:auth github.com username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:auth other.example.com user2 pass2"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "chmod 644 ${DOKKU_ROOT}/.netrc"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:auth github.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Removing netrc auth entry for host github.com"
+
+  if [[ -f "${DOKKU_ROOT}/.netrc" ]]; then
+    run /bin/bash -c "stat -c '%a' ${DOKKU_ROOT}/.netrc"
+    echo "output: $output"
+    echo "status: $status"
+    assert_success
+    assert_output "600"
+  fi
+}
+
+@test "(git) git:auth-status" {
+  run /bin/bash -c "dokku git:auth-status"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 3
+  assert_output_contains "Please supply a git host"
+
+  run /bin/bash -c "dokku git:auth-status github.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 0
+
+  run /bin/bash -c "dokku git:auth-status github.com username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 1
+
+  run /bin/bash -c "dokku git:auth github.com username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:auth-status github.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 2
+
+  run /bin/bash -c "dokku git:auth-status github.com username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 0
+
+  run /bin/bash -c "dokku git:auth-status github.com username wrong-password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 2
+
+  run /bin/bash -c "dokku git:auth-status github.com other-username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 2
+
+  run /bin/bash -c "dokku git:auth-status github.com username"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 3
+  assert_output_contains "Missing password for netrc auth entry"
+
+  run /bin/bash -c "printf 'password' | dokku git:auth-status github.com username"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 0
+
+  run /bin/bash -c "printf 'wrong-password' | dokku git:auth-status github.com username"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 2
+}
+
+@test "(git:auth-status) distinguishes a missing entry from a differing entry" {
+  run /bin/bash -c "dokku git:auth auth-status.example.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:auth-status auth-status.example.com username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 1
+
+  run /bin/bash -c "dokku git:auth-status auth-status.example.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 0
+
+  run /bin/bash -c "dokku git:auth auth-status.example.com username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:auth-status auth-status.example.com username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 0
+
+  run /bin/bash -c "dokku git:auth-status auth-status.example.com username other-password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 2
+
+  run /bin/bash -c "dokku git:auth-status auth-status.example.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 2
+
+  run /bin/bash -c "dokku git:auth auth-status.example.com"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:auth-status auth-status.example.com username password"
+  echo "output: $output"
+  echo "status: $status"
+  assert_exit_status 1
+}
+
+@test "(git) git:sync new [errors]" {
+  run /bin/bash -c "dokku git:sync"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+
+  run /bin/bash -c "dokku git:sync $TEST_APP-non-existent"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+
+  run create_app "$TEST_APP-non-existent"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:sync $TEST_APP-non-existent"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+
+  run destroy_app 0 "$TEST_APP-non-existent"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+}
+
+@test "(git) git:sync new [--no-build noarg]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_MASTER_SHA"
+}
+
+@test "(git) git:sync new [--no-build branch]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_ANOTHER_BRANCH_SHA"
+}
+
+@test "(git) git:sync new [--no-build tag]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+}
+
+@test "(git) git:sync new [--no-build commit]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git $SMOKE_TEST_APP_COMMIT_SHA"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_COMMIT_SHA"
+}
+
+@test "(git) git:sync new [--build noarg]" {
+  run /bin/bash -c "dokku git:sync --build $TEST_APP https://github.com/dokku/smoke-test-app.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Application deployed"
+
+  run /bin/bash -c "dokku config:get $TEST_APP GIT_REV"
+  echo "output: $output"
+  echo "status: $status"
+  assert_output_exists
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_MASTER_SHA"
+
+  run /bin/bash -c "dokku git:sync --build-if-changes $TEST_APP https://github.com/dokku/smoke-test-app.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_MASTER_SHA"
+
+  # the no-op tick must not add a record of its own, and must leave the
+  # succeeded record of the build above untouched
+  run /bin/bash -c "ls $DOKKU_LIB_ROOT/data/builds/$TEST_APP/*.json 2>/dev/null | wc -l"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "1"
+
+  run /bin/bash -c "dokku builds:list $TEST_APP --format json"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains '"status":"succeeded"'
+  assert_output_not_contains '"display_status":"abandoned"'
+}
+
+@test "(git) git:sync new [no build leaves no build record]" {
+  run /bin/bash -c "rm -rf $DOKKU_LIB_ROOT/data/builds/$TEST_APP"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  # a sync with no build flag builds nothing, so it should record nothing
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "ls $DOKKU_LIB_ROOT/data/builds/$TEST_APP/*.json 2>/dev/null | wc -l"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "0"
+
+  # and neither should a --build-if-changes poll that finds no changes
+  run /bin/bash -c "dokku git:sync --build-if-changes $TEST_APP https://github.com/dokku/smoke-test-app.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+
+  run /bin/bash -c "ls $DOKKU_LIB_ROOT/data/builds/$TEST_APP/*.json 2>/dev/null | wc -l"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "0"
+
+  run /bin/bash -c "ls $DOKKU_LIB_ROOT/data/builds/$TEST_APP/*.log 2>/dev/null | wc -l"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "0"
+}
+
+@test "(git) git:sync new [--build branch]" {
+  run /bin/bash -c "dokku git:sync --build $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Application deployed"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_ANOTHER_BRANCH_SHA"
+
+  run /bin/bash -c "dokku git:sync --build-if-changes $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_ANOTHER_BRANCH_SHA"
+}
+
+@test "(git) git:sync new [--build tag]" {
+  run /bin/bash -c "dokku git:sync --build $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Application deployed"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync --build-if-changes $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+}
+
+@test "(git) git:sync new [--build commit]" {
+  run /bin/bash -c "dokku git:sync --build $TEST_APP https://github.com/dokku/smoke-test-app.git $SMOKE_TEST_APP_COMMIT_SHA"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Application deployed"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_COMMIT_SHA"
+
+  run /bin/bash -c "dokku git:sync --build-if-changes $TEST_APP https://github.com/dokku/smoke-test-app.git $SMOKE_TEST_APP_COMMIT_SHA"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_COMMIT_SHA"
+}
+
+@test "(git) git:sync existing [errors]" {
+  run /bin/bash -c "dokku git:sync"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+
+  run /bin/bash -c "dokku git:sync $TEST_APP-non-existent"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+
+  run create_app "$TEST_APP-non-existent"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:sync $TEST_APP-non-existent"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+
+  run destroy_app 0 "$TEST_APP-non-existent"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+}
+
+@test "(git) git:sync existing [--no-build noarg]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Fetching remote code for"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_MASTER_SHA"
+}
+
+@test "(git) git:sync existing [--no-build branch]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_ANOTHER_BRANCH_SHA"
+}
+
+@test "(git) git:sync existing [--no-build tag]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 2.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_2_0_0_SHA"
+}
+
+@test "(git) git:sync existing [--no-build annotated-tag]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 2.0.0-annotated"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_2_0_0_SHA"
+}
+
+@test "(git) git:sync existing [--no-build commit]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git $SMOKE_TEST_APP_COMMIT_SHA"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_COMMIT_SHA"
+}
+
+@test "(git) git:sync existing [--build noarg]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync --build $TEST_APP https://github.com/dokku/smoke-test-app.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Application deployed"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_MASTER_SHA"
+
+  run /bin/bash -c "dokku git:sync --build-if-changes $TEST_APP https://github.com/dokku/smoke-test-app.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_MASTER_SHA"
+}
+
+@test "(git) git:sync existing [--build branch]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 2.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_2_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync --build $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Application deployed"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_ANOTHER_BRANCH_SHA"
+
+  run /bin/bash -c "dokku git:sync --build-if-changes $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_ANOTHER_BRANCH_SHA"
+}
+
+@test "(git) git:sync existing [--build tag]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync --build $TEST_APP https://github.com/dokku/smoke-test-app.git 2.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Application deployed"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_2_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync --build-if-changes $TEST_APP https://github.com/dokku/smoke-test-app.git 2.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_2_0_0_SHA"
+}
+
+@test "(git) git:sync existing [--build commit]" {
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git 1.0.0"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_1_0_0_SHA"
+
+  run /bin/bash -c "dokku git:sync --build $TEST_APP https://github.com/dokku/smoke-test-app.git $SMOKE_TEST_APP_COMMIT_SHA"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Application deployed"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_COMMIT_SHA"
+
+  run /bin/bash -c "dokku git:sync --build-if-changes $TEST_APP https://github.com/dokku/smoke-test-app.git $SMOKE_TEST_APP_COMMIT_SHA"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+
+  run /bin/bash -c "cat /home/dokku/$TEST_APP/refs/heads/master"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "$SMOKE_TEST_APP_COMMIT_SHA"
+}
+
+@test "(git) git:sync private" {
+  if [[ -z "$SYNC_GITHUB_USERNAME" ]] || [[ -z "$SYNC_GITHUB_PASSWORD" ]]; then
+    skip "skipping due to missing github credentials SYNC_GITHUB_USERNAME:SYNC_GITHUB_PASSWORD"
+  fi
+
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app-private.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+  assert_output_contains "fatal: could not read Username for"
+
+  run /bin/bash -c "dokku git:auth github.com $SYNC_GITHUB_USERNAME $SYNC_GITHUB_PASSWORD"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "cat /home/dokku/.netrc"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app-private.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:sync --build-if-changes $TEST_APP https://github.com/dokku/smoke-test-app-private.git"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+}
+
+@test "(git) git:public-key" {
+  run /bin/bash -c "dokku git:public-key"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+  assert_output_contains "There is no deploy key associated with the dokku user."
+
+  run /bin/bash -c "cp /root/.ssh/dokku_test_rsa.pub /home/dokku/.ssh/id_rsa.pub"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:public-key"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+}
+
+@test "(git:sync) --skip-deploy-branch" {
+  run /bin/bash -c "dokku git:report $TEST_APP --git-computed-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "master"
+
+  run /bin/bash -c "dokku git:sync $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Detected branch, setting deploy-branch to another-branch"
+
+  run /bin/bash -c "dokku git:report $TEST_APP --git-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "another-branch"
+
+  run destroy_app
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run create_app
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:report $TEST_APP --git-computed-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "master"
+
+  run /bin/bash -c "dokku git:sync --skip-deploy-branch $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "skipping deploy-branch setting"
+
+  run /bin/bash -c "dokku git:report $TEST_APP --git-computed-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "master"
+}
+
+@test "(git:sync) --build --skip-deploy-branch" {
+  run /bin/bash -c "dokku git:report $TEST_APP --git-computed-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "master"
+
+  run /bin/bash -c "dokku git:sync --build --skip-deploy-branch $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "skipping deploy-branch setting"
+  assert_output_contains "Application deployed"
+
+  run /bin/bash -c "dokku git:report $TEST_APP --git-computed-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "master"
+}
+
+@test "(git:sync) --build-if-changes --skip-deploy-branch" {
+  run /bin/bash -c "dokku git:report $TEST_APP --git-computed-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "master"
+
+  run /bin/bash -c "dokku git:sync --build-if-changes --skip-deploy-branch $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "skipping deploy-branch setting"
+  assert_output_contains "Application deployed"
+
+  run /bin/bash -c "dokku git:report $TEST_APP --git-computed-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "master"
+
+  run /bin/bash -c "dokku git:sync --build-if-changes --skip-deploy-branch $TEST_APP https://github.com/dokku/smoke-test-app.git another-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "Skipping build as no changes were detected"
+
+  run /bin/bash -c "dokku git:report $TEST_APP --git-computed-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "master"
+}
+
+@test "(git:report) --format json" {
+  run /bin/bash -c "dokku git:set $TEST_APP deploy-branch main"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:report $TEST_APP --format json | jq -r '.\"deploy-branch\"'"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "main"
+
+  run /bin/bash -c "dokku git:report $TEST_APP --format json | jq -r '.\"global-deploy-branch\"'"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output ""
+
+  run /bin/bash -c "dokku git:report $TEST_APP --format json | jq -r '.\"computed-deploy-branch\"'"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "main"
+
+  run /bin/bash -c "dokku git:report $TEST_APP --format json | jq -e ."
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:report --format json | jq -e ."
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:report $TEST_APP --format json --git-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_failure
+  assert_output_contains "--format flag cannot be specified when specifying an info flag"
+}
+
+@test "(git:report) --global" {
+  run /bin/bash -c "dokku git:report --global"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output_contains "global git information"
+  assert_output_contains "Git global deploy branch"
+}
+
+@test "(git:report) --global --format json" {
+  run /bin/bash -c "dokku git:report --global --format json | jq -e ."
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+
+  run /bin/bash -c "dokku git:report --global --format json | jq -r '.\"global-deploy-branch\"'"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output ""
+
+  run /bin/bash -c "dokku git:report --global --format json | jq -r '.\"computed-deploy-branch\"'"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "master"
+
+  run /bin/bash -c "dokku git:report --global --format json | jq -r 'has(\"deploy-branch\")'"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "false"
+
+  run /bin/bash -c "dokku git:report --global --git-global-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output ""
+
+  run /bin/bash -c "dokku git:report --global --git-computed-deploy-branch"
+  echo "output: $output"
+  echo "status: $status"
+  assert_success
+  assert_output "master"
+}

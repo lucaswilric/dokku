@@ -1,0 +1,84 @@
+package apps
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/dokku/dokku/plugins/common"
+)
+
+// ReportSingleApp is an internal function that displays the app report for one or more apps
+func ReportSingleApp(appName string, format string, infoFlag string) error {
+	if appName != "--global" {
+		if err := common.VerifyAppName(appName); err != nil {
+			return err
+		}
+	}
+
+	var flags map[string]common.ReportFunc
+	if appName == "--global" {
+		flags = map[string]common.ReportFunc{
+			"--app-global-disable-autocreation": reportGlobalDisableAutocreation,
+		}
+	} else {
+		flags = map[string]common.ReportFunc{
+			"--app-created-at":                  reportCreatedAt,
+			"--app-deploy-source":               reportDeploySource,
+			"--app-deploy-source-metadata":      reportDeploySourceMetadata,
+			"--app-dir":                         reportDir,
+			"--app-global-disable-autocreation": reportGlobalDisableAutocreation,
+			"--app-locked":                      reportLocked,
+		}
+	}
+
+	flagKeys := []string{}
+	for flagKey := range flags {
+		flagKeys = append(flagKeys, flagKey)
+	}
+
+	infoFlags := common.CollectReport(appName, infoFlag, flags)
+	return common.ReportSingleApp(common.ReportSingleAppInput{
+		ReportType:              "app",
+		AppName:                 appName,
+		InfoFlag:                infoFlag,
+		InfoFlags:               infoFlags,
+		InfoFlagKeys:            flagKeys,
+		Format:                  format,
+		TrimPrefix:              true,
+		UppercaseFirstCharacter: true,
+		EmitLegacyPrefix:        true,
+	})
+}
+
+func reportCreatedAt(appName string) string {
+	createdAt, err := common.PropertyListGet("apps", appName, "created-at")
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprint(strings.Join(createdAt, ","))
+}
+
+func reportDeploySource(appName string) string {
+	return common.PropertyGet("apps", appName, "deploy-source")
+}
+
+func reportDeploySourceMetadata(appName string) string {
+	return common.PropertyGet("apps", appName, "deploy-source-metadata")
+}
+
+func reportDir(appName string) string {
+	return common.AppRoot(appName)
+}
+
+func reportGlobalDisableAutocreation(appName string) string {
+	return common.PropertyGet("apps", "--global", "disable-autocreation")
+}
+
+func reportLocked(appName string) string {
+	locked := "false"
+	if appIsLocked(appName) {
+		locked = "true"
+	}
+
+	return locked
+}

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/property-functions"
+source "$PLUGIN_AVAILABLE_PATH/checks/functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+fn-checks-disabled-list() {
+  declare APP="$1"
+
+  local DOKKU_CHECKS_DISABLED=$(fn-plugin-property-get-default "checks" "$APP" "disabled" "")
+  DOKKU_CHECKS_DISABLED="${DOKKU_CHECKS_DISABLED:-none}"
+  echo "$DOKKU_CHECKS_DISABLED"
+}
+
+fn-checks-skipped-list() {
+  declare APP="$1"
+
+  local DOKKU_CHECKS_SKIPPED=$(fn-plugin-property-get-default "checks" "$APP" "skipped" "")
+  DOKKU_CHECKS_SKIPPED="${DOKKU_CHECKS_SKIPPED:-none}"
+  echo "$DOKKU_CHECKS_SKIPPED"
+}
+
+fn-checks-computed-wait-to-retire() {
+  declare APP="$1"
+
+  file="$(fn-checks-wait-to-retire "$APP")"
+  if [[ "$file" == "" ]]; then
+    file="$(fn-checks-global-wait-to-retire "$APP")"
+  fi
+  if [[ "$file" == "" ]]; then
+    file="60"
+  fi
+
+  echo "$file"
+}
+
+fn-checks-global-wait-to-retire() {
+  declare APP="$1"
+
+  fn-plugin-property-get-default "checks" "--global" "wait-to-retire" ""
+}
+
+fn-checks-wait-to-retire() {
+  declare APP="$1"
+
+  fn-plugin-property-get-default "checks" "$APP" "wait-to-retire" ""
+}

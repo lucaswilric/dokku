@@ -1,0 +1,112 @@
+package builder
+
+import (
+	"github.com/dokku/dokku/plugins/common"
+)
+
+// ReportSingleApp is an internal function that displays the builder report for one or more apps
+func ReportSingleApp(appName string, format string, infoFlag string) error {
+	if appName != "--global" {
+		if err := common.VerifyAppName(appName); err != nil {
+			return err
+		}
+	}
+
+	var flags map[string]common.ReportFunc
+	if appName == "--global" {
+		flags = map[string]common.ReportFunc{
+			"--builder-global-selected":       reportGlobalSelected,
+			"--builder-global-build-dir":      reportGlobalBuildDir,
+			"--builder-global-skip-cleanup":   reportGlobalSkipCleanup,
+			"--builder-computed-skip-cleanup": reportComputedSkipCleanup,
+		}
+	} else {
+		flags = map[string]common.ReportFunc{
+			"--builder-computed-selected":     reportComputedSelected,
+			"--builder-global-selected":       reportGlobalSelected,
+			"--builder-selected":              reportSelected,
+			"--builder-detected":              reportDetected,
+			"--builder-computed-build-dir":    reportComputedBuildDir,
+			"--builder-global-build-dir":      reportGlobalBuildDir,
+			"--builder-build-dir":             reportBuildDir,
+			"--builder-computed-skip-cleanup": reportComputedSkipCleanup,
+			"--builder-global-skip-cleanup":   reportGlobalSkipCleanup,
+			"--builder-skip-cleanup":          reportSkipCleanup,
+		}
+	}
+
+	flagKeys := []string{}
+	for flagKey := range flags {
+		flagKeys = append(flagKeys, flagKey)
+	}
+
+	infoFlags := common.CollectReport(appName, infoFlag, flags)
+	return common.ReportSingleApp(common.ReportSingleAppInput{
+		ReportType:              "builder",
+		AppName:                 appName,
+		InfoFlag:                infoFlag,
+		InfoFlags:               infoFlags,
+		InfoFlagKeys:            flagKeys,
+		Format:                  format,
+		TrimPrefix:              true,
+		UppercaseFirstCharacter: true,
+		EmitLegacyPrefix:        true,
+	})
+}
+
+func reportComputedSelected(appName string) string {
+	value := reportSelected(appName)
+	if value == "" {
+		value = reportGlobalSelected(appName)
+	}
+
+	return value
+}
+
+func reportGlobalSelected(appName string) string {
+	return common.PropertyGet("builder", "--global", "selected")
+}
+
+func reportDetected(appName string) string {
+	return common.PropertyGet("builder", appName, "detected")
+}
+
+func reportSelected(appName string) string {
+	return common.PropertyGet("builder", appName, "selected")
+}
+
+func reportComputedBuildDir(appName string) string {
+	value := reportBuildDir(appName)
+	if value == "" {
+		value = reportGlobalBuildDir(appName)
+	}
+
+	return value
+}
+func reportGlobalBuildDir(appName string) string {
+	return common.PropertyGet("builder", "--global", "build-dir")
+}
+
+func reportBuildDir(appName string) string {
+	return common.PropertyGet("builder", appName, "build-dir")
+}
+
+func reportComputedSkipCleanup(appName string) string {
+	value := reportSkipCleanup(appName)
+	if value == "" {
+		value = reportGlobalSkipCleanup(appName)
+	}
+	if value == "" {
+		value = "false"
+	}
+
+	return value
+}
+
+func reportGlobalSkipCleanup(appName string) string {
+	return common.PropertyGet("builder", "--global", "skip-cleanup")
+}
+
+func reportSkipCleanup(appName string) string {
+	return common.PropertyGet("builder", appName, "skip-cleanup")
+}

@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/functions"
+source "$PLUGIN_CORE_AVAILABLE_PATH/common/property-functions"
+set -eo pipefail
+[[ $DOKKU_TRACE ]] && set -x
+
+fn-builder-pack-computed-projecttoml-path() {
+  declare APP="$1"
+
+  file="$(fn-builder-pack-projecttoml-path "$APP")"
+  if [[ "$file" == "" ]]; then
+    file="$(fn-builder-pack-global-projecttoml-path "$APP")"
+  fi
+  if [[ "$file" == "" ]]; then
+    file="project.toml"
+  fi
+
+  echo "$file"
+}
+
+fn-builder-pack-global-projecttoml-path() {
+  declare APP="$1"
+
+  fn-plugin-property-get-default "builder-pack" "--global" "projecttoml-path" ""
+}
+
+fn-builder-pack-projecttoml-path() {
+  declare APP="$1"
+
+  fn-plugin-property-get-default "builder-pack" "$APP" "projecttoml-path" ""
+}

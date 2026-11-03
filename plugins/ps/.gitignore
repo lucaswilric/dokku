@@ -1,0 +1,15 @@
+/app-restart
+/commands
+/core-post-deploy
+/core-post-extract
+/docker-args-process-deploy
+/install
+/post-*
+/pre-*
+/procfile-*
+/proxy-*
+/ps-*
+/report
+/subcommands/*
+/triggers
+/triggers/*

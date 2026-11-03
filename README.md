@@ -1,156 +1,116 @@
 # Dokku
 
+[![Build Status](https://github.com/dokku/dokku/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/dokku/dokku/actions?query=branch%3Amaster)
+[![Ubuntu Package](https://img.shields.io/badge/package-ubuntu-brightgreen.svg?style=flat-square "Ubuntu Package")](https://packagecloud.io/dokku/dokku)
+[![Arch Package](https://img.shields.io/badge/package-arch-brightgreen.svg?style=flat-square "Arch Package")](https://aur.archlinux.org/packages/dokku/)
+[![Slack Group](https://img.shields.io/badge/irc-slack-blue.svg?style=flat-square "Slack Group")](https://slack.dokku.com/)
+[![Documentation](https://img.shields.io/badge/docs-site-blue.svg?style=flat-square "Site")](https://dokku.com/docs/getting-started/installation/)
+[![OpenCollective](https://opencollective.com/dokku/sponsors/badge.svg?style=flat-square)](#sponsors)
+[![OpenCollective](https://opencollective.com/dokku/backers/badge.svg?style=flat-square)](#backers)
+[![Patreon](https://img.shields.io/badge/patreon-donate-green.svg?style=flat-square)](https://www.patreon.com/dokku/)
+
 Docker powered mini-Heroku. The smallest PaaS implementation you've ever seen.
 
-[![Build Status](https://travis-ci.org/progrium/dokku.png?branch=master)](https://travis-ci.org/progrium/dokku)
+## Sponsors
+
+Become a sponsor and get your logo on our README on GitHub with a link to your site. [[Become a sponsor](https://opencollective.com/dokku#sponsor)]
+
+[![OpenCollective Sponsor 0](https://opencollective.com/dokku/sponsor/0/avatar.svg)](https://opencollective.com/dokku/sponsor/0/website)
+[![OpenCollective Sponsor 1](https://opencollective.com/dokku/sponsor/1/avatar.svg)](https://opencollective.com/dokku/sponsor/1/website)
+[![OpenCollective Sponsor 2](https://opencollective.com/dokku/sponsor/2/avatar.svg)](https://opencollective.com/dokku/sponsor/2/website)
+[![OpenCollective Sponsor 3](https://opencollective.com/dokku/sponsor/3/avatar.svg)](https://opencollective.com/dokku/sponsor/3/website)
+[![OpenCollective Sponsor 4](https://opencollective.com/dokku/sponsor/4/avatar.svg)](https://opencollective.com/dokku/sponsor/4/website)
+[![OpenCollective Sponsor 5](https://opencollective.com/dokku/sponsor/5/avatar.svg)](https://opencollective.com/dokku/sponsor/5/website)
+[![OpenCollective Sponsor 6](https://opencollective.com/dokku/sponsor/6/avatar.svg)](https://opencollective.com/dokku/sponsor/6/website)
+[![OpenCollective Sponsor 7](https://opencollective.com/dokku/sponsor/7/avatar.svg)](https://opencollective.com/dokku/sponsor/7/website)
+[![OpenCollective Sponsor 8](https://opencollective.com/dokku/sponsor/8/avatar.svg)](https://opencollective.com/dokku/sponsor/8/website)
+[![OpenCollective Sponsor 9](https://opencollective.com/dokku/sponsor/9/avatar.svg)](https://opencollective.com/dokku/sponsor/9/website)
+[![OpenCollective Sponsor 10](https://opencollective.com/dokku/sponsor/10/avatar.svg)](https://opencollective.com/dokku/sponsor/10/website)
+[![OpenCollective Sponsor 11](https://opencollective.com/dokku/sponsor/11/avatar.svg)](https://opencollective.com/dokku/sponsor/11/website)
+[![OpenCollective Sponsor 12](https://opencollective.com/dokku/sponsor/12/avatar.svg)](https://opencollective.com/dokku/sponsor/12/website)
+[![OpenCollective Sponsor 13](https://opencollective.com/dokku/sponsor/13/avatar.svg)](https://opencollective.com/dokku/sponsor/13/website)
+[![OpenCollective Sponsor 14](https://opencollective.com/dokku/sponsor/14/avatar.svg)](https://opencollective.com/dokku/sponsor/14/website)
+[![OpenCollective Sponsor 15](https://opencollective.com/dokku/sponsor/15/avatar.svg)](https://opencollective.com/dokku/sponsor/5/website)
+[![OpenCollective Sponsor 6](https://opencollective.com/dokku/sponsor/16/avatar.svg)](https://opencollective.com/dokku/sponsor/16/website)
+[![OpenCollective Sponsor 17](https://opencollective.com/dokku/sponsor/17/avatar.svg)](https://opencollective.com/dokku/sponsor/17/website)
+[![OpenCollective Sponsor 18](https://opencollective.com/dokku/sponsor/18/avatar.svg)](https://opencollective.com/dokku/sponsor/18/website)
+
+## Backers
+
+Support us with a monthly donation and help us continue our activities. [[Become a backer](https://opencollective.com/dokku#backer)]
+
+[![OpenCollective Backer 0](https://opencollective.com/dokku/backer/0/avatar.svg)](https://opencollective.com/dokku/backer/0/website)
+[![OpenCollective Backer 1](https://opencollective.com/dokku/backer/1/avatar.svg)](https://opencollective.com/dokku/backer/1/website)
+[![OpenCollective Backer 2](https://opencollective.com/dokku/backer/2/avatar.svg)](https://opencollective.com/dokku/backer/2/website)
+[![OpenCollective Backer 3](https://opencollective.com/dokku/backer/3/avatar.svg)](https://opencollective.com/dokku/backer/3/website)
+[![OpenCollective Backer 4](https://opencollective.com/dokku/backer/4/avatar.svg)](https://opencollective.com/dokku/backer/4/website)
+[![OpenCollective Backer 5](https://opencollective.com/dokku/backer/5/avatar.svg)](https://opencollective.com/dokku/backer/5/website)
+[![OpenCollective Backer 6](https://opencollective.com/dokku/backer/6/avatar.svg)](https://opencollective.com/dokku/backer/6/website)
+[![OpenCollective Backer 7](https://opencollective.com/dokku/backer/7/avatar.svg)](https://opencollective.com/dokku/backer/7/website)
+[![OpenCollective Backer 8](https://opencollective.com/dokku/backer/8/avatar.svg)](https://opencollective.com/dokku/backer/8/website)
+[![OpenCollective Backer 9](https://opencollective.com/dokku/backer/9/avatar.svg)](https://opencollective.com/dokku/backer/9/website)
+[![OpenCollective Backer 10](https://opencollective.com/dokku/backer/10/avatar.svg)](https://opencollective.com/dokku/backer/10/website)
+[![OpenCollective Backer 11](https://opencollective.com/dokku/backer/11/avatar.svg)](https://opencollective.com/dokku/backer/11/website)
+[![OpenCollective Backer 12](https://opencollective.com/dokku/backer/12/avatar.svg)](https://opencollective.com/dokku/backer/12/website)
+[![OpenCollective Backer 13](https://opencollective.com/dokku/backer/13/avatar.svg)](https://opencollective.com/dokku/backer/13/website)
+[![OpenCollective Backer 14](https://opencollective.com/dokku/backer/14/avatar.svg)](https://opencollective.com/dokku/backer/14/website)
+[![OpenCollective Backer 15](https://opencollective.com/dokku/backer/15/avatar.svg)](https://opencollective.com/dokku/backer/15/website)
+[![OpenCollective Backer 16](https://opencollective.com/dokku/backer/16/avatar.svg)](https://opencollective.com/dokku/backer/16/website)
+[![OpenCollective Backer 17](https://opencollective.com/dokku/backer/17/avatar.svg)](https://opencollective.com/dokku/backer/17/website)
+[![OpenCollective Backer 18](https://opencollective.com/dokku/backer/18/avatar.svg)](https://opencollective.com/dokku/backer/18/website)
+[![OpenCollective Backer 19](https://opencollective.com/dokku/backer/19/avatar.svg)](https://opencollective.com/dokku/backer/19/website)
+[![OpenCollective Backer 20](https://opencollective.com/dokku/backer/20/avatar.svg)](https://opencollective.com/dokku/backer/20/website)
+[![OpenCollective Backer 21](https://opencollective.com/dokku/backer/21/avatar.svg)](https://opencollective.com/dokku/backer/21/website)
+[![OpenCollective Backer 22](https://opencollective.com/dokku/backer/22/avatar.svg)](https://opencollective.com/dokku/backer/22/website)
+[![OpenCollective Backer 23](https://opencollective.com/dokku/backer/23/avatar.svg)](https://opencollective.com/dokku/backer/23/website)
+[![OpenCollective Backer 24](https://opencollective.com/dokku/backer/24/avatar.svg)](https://opencollective.com/dokku/backer/24/website)
+[![OpenCollective Backer 25](https://opencollective.com/dokku/backer/25/avatar.svg)](https://opencollective.com/dokku/backer/25/website)
+[![OpenCollective Backer 26](https://opencollective.com/dokku/backer/26/avatar.svg)](https://opencollective.com/dokku/backer/26/website)
+[![OpenCollective Backer 27](https://opencollective.com/dokku/backer/27/avatar.svg)](https://opencollective.com/dokku/backer/27/website)
+[![OpenCollective Backer 28](https://opencollective.com/dokku/backer/28/avatar.svg)](https://opencollective.com/dokku/backer/28/website)
+[![OpenCollective Backer 29](https://opencollective.com/dokku/backer/29/avatar.svg)](https://opencollective.com/dokku/backer/29/website)
 
 ## Requirements
 
-Assumes Ubuntu 13 or 12.04 x64 right now. Ideally have a domain ready to point to your host. It's designed for and is probably
-best to use a fresh VM. The bootstrapper will install everything it needs.
+A fresh VM running any of the following operating systems:
 
-**Note: There are known issues with docker and Ubuntu 13.10 ([1](https://github.com/dotcloud/docker/issues/1300), [2](https://github.com/dotcloud/docker/issues/1906)) - use of 12.04 is recommended until these issues are resolved.**
+- Ubuntu 22.04 / 24.04 / 26.04 (amd64/arm64) - Any currently supported release
+- Debian 11+ (amd64/arm64)
 
-## Installing
+An SSH keypair that can be used for application deployment. If this exists before installation, it will be automatically imported into dokku.
+Otherwise, you will need to import the keypair manually after installation using `dokku ssh-keys:add`.
 
-### Stable
+## Installation
 
-    $ wget -qO- https://raw.github.com/progrium/dokku/v0.2.2/bootstrap.sh | sudo DOKKU_TAG=v0.2.2 bash
+To install the latest stable release, run the following commands as a user who has access to `sudo`:
 
-**Note**: Users on 12.04 will need to run `apt-get install -y python-software-properties` before bootstrapping stable.
-
-### Development
-
-    $ wget -qO- https://raw.github.com/progrium/dokku/master/bootstrap.sh | sudo bash
-
-This may take around 5 minutes. Certainly better than the several hours it takes to bootstrap Cloud Foundry.
-
-You may also wish to take a look at the [advanced installation](http://progrium.viewdocs.io/dokku/advanced-installation) document for additional installation options.
-
-## Configuring
-
-Set up a domain and a wildcard domain pointing to that host. Make sure `/home/dokku/VHOST` is set to this domain. By default it's set to whatever hostname the host has. This file is only created if the hostname can be resolved by dig (`dig +short $(hostname -f)`). Otherwise you have to create the file manually and set it to your preferred domain. If this file still is not present when you push your app, dokku will publish the app with a port number (i.e. `http://example.com:49154` - note the missing subdomain).
-
-You'll have to add a public key associated with a username by doing something like this from your local machine:
-
-    $ cat ~/.ssh/id_rsa.pub | ssh progriumapp.com "sudo sshcommand acl-add dokku progrium"
-
-That's it!
-
-## Deploy an App
-
-Now you can deploy apps on your Dokku. Let's deploy the [Heroku Node.js sample app](https://github.com/heroku/node-js-sample). All you have to do is add a remote to name the app. It's created on-the-fly.
-
-    $ cd node-js-sample
-    $ git remote add progrium dokku@progriumapp.com:node-js-app
-    $ git push progrium master
-    Counting objects: 296, done.
-    Delta compression using up to 4 threads.
-    Compressing objects: 100% (254/254), done.
-    Writing objects: 100% (296/296), 193.59 KiB, done.
-    Total 296 (delta 25), reused 276 (delta 13)
-    -----> Building node-js-app ...
-           Node.js app detected
-    -----> Resolving engine versions
-
-    ... blah blah blah ...
-
-    -----> Application deployed:
-           http://node-js-app.progriumapp.com
-
-You're done!
-
-Right now Buildstep supports buildpacks for Node.js, Ruby, Python, [and more](https://github.com/progrium/buildstep#supported-buildpacks). It's not hard to add more, [go add more](https://github.com/progrium/buildstep#adding-buildpacks)!
-Please check the documentation for your particular build pack as you may need to include configuration files (such as a Procfile) in your project root.
-
-## Remote commands
-
-Dokku commands can be run over ssh. Anywhere you would run `dokku <command>`, just run `ssh -t dokku@progriumapp.com <command>`
-The `-t` is used to request a pty. It is highly recommended to do so.
-To avoid the need to type the `-t` option each time, simply create/modify a section in the `.ssh/config` on the client side, as follows :
-
-    Host progriumapp.com
-    RequestTTY yes
-
-## Run a command in the app environment
-
-It's possible to run commands in the environment of the deployed application:
-
-    $ dokku run node-js-app ls -alh
-    $ dokku run <app> <cmd>
-
-## Plugins
-
-Dokku itself is built out of plugins. Checkout the wiki for information about
-creating your own and a list of existing plugins:
-
-https://github.com/progrium/dokku/wiki/Plugins
-
-## Removing a deployed app
-
-SSH onto the server, then execute:
-
-    $ dokku delete myapp
-
-## Environment variable management
-
-Typically an application will require some environment variables to run properly. Environment variables may contain private data, such as passwords or API keys, so it is not recommend to store them in your application's repository.
-
-The `config` plugin provides the following commands to manage your variables:
-```
-config <app> - display the config vars for an app  
-config:get <app> KEY - display a config value for an app  
-config:set <app> KEY1=VALUE1 [KEY2=VALUE2 ...] - set one or more config vars
-config:unset <app> KEY1 [KEY2 ...] - unset one or more config vars
+```shell
+wget -NP . https://dokku.com/install/v0.38.34/bootstrap.sh
+sudo DOKKU_TAG=v0.38.34 bash bootstrap.sh
 ```
 
-## TLS support
+You can then proceed to configure your server domain (via `dokku domains:set-global`) and user access (via `dokku ssh-keys:add`) to complete the installation.
 
-Dokku provides easy TLS support from the box. To enable TLS connection to your application, copy the `.crt` and `.key` files into the `/home/dokku/:app/ssl` folder (notice, file names should be `server.crt` and `server.key`, respectively). Redeployment of the application will be needed to apply TLS configuration. Once it is redeployed, the application will be accessible by `https://` (redirection from `http://` is applied as well).
+If you wish for a more unattended installation method, see [these](https://dokku.com/docs/getting-started/install/debian/#unattended-installation) docs.
 
-## Upgrading
+### Upgrade
 
-Dokku is in active development. You can update the deployment step and the build step separately.
+[View the docs](https://dokku.com/docs/getting-started/upgrading/) for upgrading from an older version of Dokku.
 
-**Note**: If you are upgrading from a revision prior to [27d4bc8c3c](https://github.com/progrium/dokku/commit/27d4bc8c3c19fe580ef3e65f2f85b85101cd83e4), follow the instructions in [this wiki entry](https://github.com/progrium/dokku/wiki/Migrating-to-Dokku-0.2.0).
+## Documentation
 
-To update the deploy step (this is updated less frequently):
-
-    $ cd ~/dokku
-    $ git pull origin master
-    $ sudo make install
-
-Nothing needs to be restarted. Changes will take effect on the next push / deployment.
-
-To update the build step:
-
-    $ git clone https://github.com/progrium/buildstep.git
-    $ cd buildstep
-    $ git pull origin master
-    $ sudo make build
-
-This will build a fresh Ubuntu Quantal image, install a number of packages, and
-eventually replace the Docker image for buildstep.
+Full documentation - including advanced installation docs - are available online at <https://dokku.com/docs/getting-started/installation/>.
 
 ## Support
 
-You can use [Github Issues](https://github.com/progrium/dokku/issues), check [Troubleshooting](https://github.com/progrium/dokku/wiki/Troubleshooting) on the wiki, or join us on [freenode in #dokku](https://webchat.freenode.net/?channels=%23dokku)
+You can use [GitHub Issues](https://github.com/dokku/dokku/issues), check [Troubleshooting](https://dokku.com/docs/getting-started/troubleshooting/) in the documentation, or join us on [Gliderlabs Slack in the #dokku channel](https://slack.dokku.com/).
 
-## Components
+## Contribution
 
- * [Docker](https://github.com/dotcloud/docker) - Container runtime and manager
- * [Buildstep](https://github.com/progrium/buildstep) - Buildpack builder
- * [pluginhook](https://github.com/progrium/pluginhook) - Shell based plugins and hooks
- * [sshcommand](https://github.com/progrium/sshcommand) - Fixed commands over SSH
+After checking [GitHub Issues](https://github.com/dokku/dokku/issues), the [Troubleshooting Guide](https://dokku.com/docs/getting-started/troubleshooting/) or having a chat with us on [Gliderlabs Slack in the #dokku channel](https://slack.dokku.com/), feel free to fork and create a Pull Request.
 
-Looking to keep codebase as simple and hackable as possible, so try to keep your line count down.
-
-## Things this project won't do
-
- * **Multi-host.** Not a huge leap, but this isn't the project for it. Have a look at [Flynn](https://flynn.io/).
- * **Multitenancy.** It's ready for it, but again, have a look at [Flynn](https://flynn.io/).
- * **Client app.** Given the constraints, running commands remotely via SSH is fine.
+While we may not merge your PR as is, they serve to start conversations and improve the general Dokku experience for all users.
 
 ## License
 
-MIT
+[MIT License](https://github.com/dokku/dokku/blob/master/LICENSE) © Jeff Lindsay
